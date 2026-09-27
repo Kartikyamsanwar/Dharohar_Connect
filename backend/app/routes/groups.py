@@ -63,6 +63,7 @@ def create_group(req: GroupCreate, db: Session = Depends(get_db), user: User = D
         capacity=req.capacity, organizer=user.name, description=req.description, verified=False, created_by=user.id,
     )
     db.add(g)
+    db.flush()  # group must exist before the membership row (FK is enforced on Postgres, not on SQLite)
     db.add(GroupMember(group_id=g.id, user_id=user.id))
     db.commit()
     return _to_dict(db, g, user)

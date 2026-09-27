@@ -64,12 +64,15 @@ def _seed_community(db) -> None:
                 description=g.get("description", ""), verified=g.get("verified", False),
             ))
     if db.query(Post).count() == 0:
-        for p in _load("community.json"):
+        posts = _load("community.json")
+        for p in posts:
             db.add(Post(
                 id=p["id"], title=p["title"], description=p["description"], author=p["author"],
                 category=p["category"], location=p["location"], date=p["date"], likes=p.get("likes", 0),
                 label=p.get("label", "community"), related_heritage=p.get("related_heritage", ""),
             ))
+        db.flush()  # posts must exist before comments insert (FK is enforced on Postgres, not on SQLite)
+        for p in posts:
             for c in p.get("comments", []):
                 db.add(Comment(post_id=p["id"], author=c["author"], text=c["text"], date=c.get("date", p["date"])))
 

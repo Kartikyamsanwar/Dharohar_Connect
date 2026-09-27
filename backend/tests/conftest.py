@@ -3,9 +3,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-_tmp = tempfile.mkdtemp()
-os.environ["DATABASE_URL"] = f"sqlite:///{Path(_tmp, 'test.db').as_posix()}"
-os.environ["JWT_SECRET"] = "test-secret"
+if "DATABASE_URL" not in os.environ:
+    _tmp = tempfile.mkdtemp()
+    os.environ["DATABASE_URL"] = f"sqlite:///{Path(_tmp, 'test.db').as_posix()}"
+os.environ.setdefault("JWT_SECRET", "test-secret")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
