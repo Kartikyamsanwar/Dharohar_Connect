@@ -1,0 +1,87 @@
+[
+  {
+    "id": "p1",
+    "title": "Sunrise at Virupaksha Temple",
+    "description": "Watching the first light hit Hampi's gopuram was unforgettable. The boulder landscape glows gold and the temple bells create a serene atmosphere.",
+    "author": "Ananya Sharma",
+    "category": "Travel Experience",
+    "location": "Hampi",
+    "date": "2026-07-12",
+    "likes": 42,
+    "label": "community",
+    "comments": [
+      {"author": "Rahul K.", "text": "Which month did you visit? Planning for October.", "date": "2026-07-13"},
+      {"author": "Ananya Sharma", "text": "November — perfect weather for walking the ruins.", "date": "2026-07-13"}
+    ],
+    "related_heritage": "Hampi"
+  },
+  {
+    "id": "p2",
+    "title": "Ajanta Murals: A Researcher's Notes",
+    "description": "Brief field notes on pigment preservation in Cave 17. The narrative panels remain among the finest surviving examples of early Indian painting.",
+    "author": "Dr. Meera Iyer",
+    "category": "Research",
+    "location": "Ajanta Caves",
+    "date": "2026-06-28",
+    "likes": 67,
+    "label": "verified",
+    "comments": [
+      {"author": "Heritage Dept.", "text": "Thank you for citing ASI conservation guidelines.", "date": "2026-06-29"}
+    ],
+    "related_heritage": "Ajanta Caves"
+  },
+  {
+    "id": "p3",
+    "title": "Konark Festival Memories",
+    "description": "The annual dance festival against the Sun Temple backdrop connects living performing arts with monumental heritage.",
+    "author": "Odisha Cultural Forum",
+    "category": "Festivals",
+    "location": "Konark",
+    "date": "2026-05-20",
+    "likes": 89,
+    "label": "verified",
+    "comments": [],
+    "related_heritage": "Konark Sun Temple"
+  },
+  {
+    "id": "p4",
+    "title": "Local Food Trail near Khajuraho",
+    "description": "Bundelkhandi thali, seasonal vegetables and temple-town hospitality made our heritage trip richer.",
+    "author": "Vikram Patel",
+    "category": "Food",
+    "location": "Khajuraho",
+    "date": "2026-04-15",
+    "likes": 31,
+    "label": "community",
+    "comments": [
+      {"author": "Priya S.", "text": "Any vegetarian recommendations?", "date": "2026-04-16"}
+    ],
+    "related_heritage": "Khajuraho Group of Monuments"
+  },
+  {
+    "id": "p5",
+    "title": "The Story Behind Sanchi's Toranas",
+    "description": "The carved gateways narrate Jataka tales and early Buddhist patronage — essential reading before a visit.",
+    "author": "History Students Collective",
+    "category": "Heritage Story",
+    "location": "Sanchi",
+    "date": "2026-03-10",
+    "likes": 55,
+    "label": "verified",
+    "comments": [],
+    "related_heritage": "Sanchi Stupa"
+  },
+  {
+    "id": "p6",
+    "title": "Playing Gilli-Danda in a Village Fair",
+    "description": "Indigenous games remain alive at local melas — a reminder that heritage includes everyday culture.",
+    "author": "Rural Heritage Walks",
+    "category": "Indigenous Games",
+    "location": "Madhya Pradesh",
+    "date": "2026-02-22",
+    "likes": 24,
+    "label": "community",
+    "comments": [],
+    "related_heritage": ""
+  }
+]

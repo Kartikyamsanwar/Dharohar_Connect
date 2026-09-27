@@ -1,0 +1,62 @@
+[
+  {
+    "id": "g1",
+    "name": "Hampi Heritage Explorers",
+    "destination": "Hampi",
+    "dates": "3 Days · Aug 25–27, 2026",
+    "budget_min": 7000,
+    "budget_max": 9000,
+    "budget_label": "₹7,000–₹9,000",
+    "interests": "Architecture + History",
+    "members": 4,
+    "capacity": 6,
+    "organizer": "Heritage Walks Karnataka",
+    "description": "Explore Vijayanagara ruins, Virupaksha Temple and Hemakuta Hill with fellow history enthusiasts.",
+    "verified": true
+  },
+  {
+    "id": "g2",
+    "name": "Ajanta-Ellora Culture Trip",
+    "destination": "Ajanta & Ellora",
+    "dates": "2 Days · Sep 10–11, 2026",
+    "budget_min": 5000,
+    "budget_max": 7000,
+    "budget_label": "₹5,000–₹7,000",
+    "interests": "History + Art",
+    "members": 3,
+    "capacity": 5,
+    "organizer": "Deccan Heritage Circle",
+    "description": "Guided visits to Ajanta murals and Ellora rock-cut caves with shared transport.",
+    "verified": true
+  },
+  {
+    "id": "g3",
+    "name": "Konark & Puri Coastal Heritage",
+    "destination": "Konark",
+    "dates": "4 Days · Oct 5–8, 2026",
+    "budget_min": 8000,
+    "budget_max": 12000,
+    "budget_label": "₹8,000–₹12,000",
+    "interests": "Architecture + Festivals",
+    "members": 2,
+    "capacity": 8,
+    "organizer": "Odisha Travellers",
+    "description": "Sun Temple, coastal culture and local festival experiences.",
+    "verified": false
+  },
+  {
+    "id": "g4",
+    "name": "Khajuraho Art & Architecture",
+    "destination": "Khajuraho",
+    "dates": "3 Days · Nov 15–17, 2026",
+    "budget_min": 6000,
+    "budget_max": 8500,
+    "budget_label": "₹6,000–₹8,500",
+    "interests": "Architecture + Photography",
+    "members": 5,
+    "capacity": 6,
+    "organizer": "Central India Explorers",
+    "description": "Temple sculpture, site museum and Bundelkhandi cuisine trail.",
+    "verified": true
+  }
+]
