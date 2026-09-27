@@ -8,5 +8,4 @@ langchain-core==0.3.74
 groq==0.31.0
 sqlalchemy>=2.0
 PyJWT>=2.8
-# Only needed when DATABASE_URL points at hosted Postgres (Neon / Supabase):
-# psycopg2-binary>=2.9
+psycopg2-binary>=2.9
