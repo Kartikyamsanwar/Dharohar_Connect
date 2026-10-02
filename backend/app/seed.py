@@ -1,19 +1,9 @@
 """Seed the database on first run. Hotel and ticket inventory is DEMO data (is_demo=True) that
 stands in for a real provider API; groups and community posts come from the curated JSON files."""
 
-from app.data_loader import HERITAGE, _load
+from app.data_loader import HERITAGE, SITE_CITY, _load
 from app.db import SessionLocal
 from app.models import Comment, Group, Hotel, Post, TicketType
-
-HERITAGE_CITY = {
-    "hampi": "Hampi", "ajanta": "Aurangabad", "ellora": "Aurangabad", "konark": "Konark", "sanchi": "Sanchi",
-    "khajuraho": "Khajuraho", "red-fort": "Delhi", "mahabalipuram": "Mahabalipuram", "taj-mahal": "Agra",
-    "qutub-minar": "Delhi", "fatehpur-sikri": "Agra", "humayuns-tomb": "Delhi", "brihadeeswarar": "Thanjavur",
-    "amber-fort": "Jaipur", "hawa-mahal": "Jaipur", "jantar-mantar-jaipur": "Jaipur", "rani-ki-vav": "Patan",
-    "dholavira": "Dholavira", "elephanta-caves": "Mumbai", "cst-mumbai": "Mumbai", "charminar": "Hyderabad",
-    "golden-temple": "Amritsar", "pattadakal": "Pattadakal", "nalanda": "Nalanda",
-    "mahabodhi-temple": "Bodh Gaya", "mysore-palace": "Mysuru", "victoria-memorial": "Kolkata",
-}
 
 TIERS = [
     ("budget", "Guesthouse", 900, 3.8, 12, ["WiFi", "Fan/AC", "Breakfast"], "Simple, clean rooms close to the heritage precinct."),
@@ -33,7 +23,7 @@ def _seed_inventory(db) -> None:
     if db.query(Hotel).count() == 0:
         cities: dict = {}
         for site in HERITAGE:
-            city = HERITAGE_CITY.get(site["id"], site["name"])
+            city = SITE_CITY.get(site["id"], site["name"])
             entry = cities.setdefault(city, {"state": site["state"], "near": []})
             entry["near"].append(site["name"])
         for city, info in cities.items():

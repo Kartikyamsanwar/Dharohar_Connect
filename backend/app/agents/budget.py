@@ -8,7 +8,8 @@ FOOD_PER_DAY = 500            # per person
 LOCAL_PER_DAY = 300           # per person: entry tickets + local transport
 
 
-def estimate_budget(req: dict, travel: dict) -> dict:
+def estimate_budget(req: dict, travel: dict, room_rate: int | None = None, room_label: str = "") -> dict:
+    room_rate = room_rate or ROOM_PER_NIGHT
     days = max(int(req.get("days", 1)), 1)
     travelers = max(int(req.get("travelers", 1) or 1), 1)
     budget = float(req.get("budget", 0) or 0)
@@ -24,7 +25,7 @@ def estimate_budget(req: dict, travel: dict) -> dict:
     rooms = math.ceil(travelers / 2)
     breakdown = {
         "transport": round(transport_total / travelers),
-        "stay": round(nights * ROOM_PER_NIGHT * rooms / travelers),
+        "stay": round(nights * room_rate * rooms / travelers),
         "food": FOOD_PER_DAY * days,
         "local": LOCAL_PER_DAY * days,
     }
@@ -38,7 +39,7 @@ def estimate_budget(req: dict, travel: dict) -> dict:
         "difference": round(budget - total) if budget else None,
         "assumptions": [
             f"Transport: {transport_basis}",
-            f"Stay: Rs {ROOM_PER_NIGHT}/room/night, {rooms} room(s), {nights} night(s)",
+            f"Stay: {room_label + ' at ' if room_label else ''}Rs {room_rate}/room/night, {rooms} room(s), {nights} night(s)",
             f"Food: Rs {FOOD_PER_DAY}/person/day",
             f"Entry tickets and local transport: Rs {LOCAL_PER_DAY}/person/day",
             "Planning estimate only; actual prices vary by season and provider.",

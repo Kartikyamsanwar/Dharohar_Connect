@@ -4,10 +4,10 @@ import httpx
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OSRM_URL = "https://router.project-osrm.org/route/v1/driving"
-HEADERS = {"User-Agent": "DharoharConnect/1.0 (heritage trip planner prototype)"}
+HEADERS = {"User-Agent": "DharoharConnect/1.0 (https://github.com/Kartikyamsanwar/Dharohar_Connect)"}
 
 
-async def _geocode(client: httpx.AsyncClient, place: str):
+async def geocode(client: httpx.AsyncClient, place: str):
     resp = await client.get(
         NOMINATIM_URL,
         params={"q": place, "format": "json", "limit": 1, "countrycodes": "in"},
@@ -31,8 +31,8 @@ async def get_route(origin: str, destination: str) -> dict:
 
     try:
         async with httpx.AsyncClient(timeout=12) as client:
-            origin_coords = await _geocode(client, origin)
-            dest_coords = await _geocode(client, destination)
+            origin_coords = await geocode(client, origin)
+            dest_coords = await geocode(client, destination)
             if not origin_coords or not dest_coords:
                 missing = origin if not origin_coords else destination
                 return {

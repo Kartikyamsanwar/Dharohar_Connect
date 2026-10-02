@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.data_loader import HERITAGE
+from app.data_loader import HERITAGE, SITE_CITY
 from app.db import get_db
 from app.models import Booking, Hotel, SavedTrip, TicketType, User
 from app.security import current_user
@@ -13,13 +13,11 @@ router = APIRouter(tags=["bookings"])
 
 def _matching_cities(query: str) -> set[str]:
     """Resolve a free-text destination (site, city or state) to hotel cities."""
-    from app.seed import HERITAGE_CITY
-
     q = query.lower().strip()
     cities = set()
     for site in HERITAGE:
-        if q and (q in site["name"].lower() or q in site["state"].lower() or q in HERITAGE_CITY.get(site["id"], "").lower()):
-            cities.add(HERITAGE_CITY.get(site["id"], site["name"]))
+        if q and (q in site["name"].lower() or q in site["state"].lower() or q in SITE_CITY.get(site["id"], "").lower()):
+            cities.add(SITE_CITY.get(site["id"], site["name"]))
     return cities
 
 
@@ -70,7 +68,8 @@ def book_hotel(req: HotelBookingRequest, user: User = Depends(current_user), db:
 def list_tickets(destination: str = "", visit_date: str = "", db: Session = Depends(get_db)):
     visit = svc.validate_visit(visit_date) if visit_date else None
     q = destination.lower().strip()
-    sites = [s for s in HERITAGE if not q or q in s["name"].lower() or q in s["state"].lower()]
+    sites = [s for s in HERITAGE if not q or q in s["name"].lower() or q in s["state"].lower()
+             or q == SITE_CITY.get(s["id"], "").lower()]
     tickets = db.query(TicketType).all()
     result = []
     for site in sites:

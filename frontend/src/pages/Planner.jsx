@@ -197,10 +197,13 @@ function TripResult({ result, form, goBook }) {
   );
 }
 
-export default function Planner({ goBook }) {
-  const [form, setForm] = useState({
+const PLAN_FIELDS = ['from_location', 'destination', 'date', 'days', 'budget', 'interests', 'travelers'];
+
+export default function Planner({ goBook, prefill }) {
+  const [form, setForm] = useState(() => ({
     from_location: 'Pune', destination: 'Hampi', date: isoDate(7), days: 3, budget: 8000, interests: 'Architecture, History', travelers: 2,
-  });
+    ...Object.fromEntries(PLAN_FIELDS.filter((k) => prefill?.[k] != null).map((k) => [k, prefill[k]])),
+  }));
   const [planned, setPlanned] = useState(form);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);

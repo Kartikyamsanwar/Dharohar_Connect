@@ -27,7 +27,7 @@ const post = (path, body) => request(path, { method: 'POST', body: JSON.stringif
 const qs = (params) => new URLSearchParams(Object.entries(params).filter(([, v]) => v !== '' && v != null)).toString();
 
 export const getHeritage = (q = '') => request(`/heritage?q=${encodeURIComponent(q)}`);
-export const chat = (message) => post('/chat', { message });
+export const chat = (message, history = []) => post('/chat', { message, history });
 export const planTrip = (payload) => post('/plan', payload);
 
 export const register = (data) => post('/auth/register', data);
@@ -57,12 +57,6 @@ export const leaveGroup = (id) => post(`/groups/${id}/leave`);
 export const getCulture = (params = {}) => request(`/culture?${qs(params)}`);
 export const getSafety = () => request('/safety');
 
-export const siteImages = {
-  Hampi: 'https://images.unsplash.com/photo-1600100397608-f0105f0b3b3c?auto=format&fit=crop&w=900&q=80',
-  'Ajanta Caves': 'https://images.unsplash.com/photo-1598091383021-15ddea10925d?auto=format&fit=crop&w=900&q=80',
-  'Ellora Caves': 'https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=900&q=80',
-  'Konark Sun Temple': 'https://images.unsplash.com/photo-1606298855672-3efb63017be8?auto=format&fit=crop&w=900&q=80',
-};
 
 export const NAV = ['HOME', 'EXPLORE', 'AI GUIDE', 'PLAN TRIP', 'BOOK', 'GROUPS', 'COMMUNITY', 'CULTURE', 'SAFETY'];
 

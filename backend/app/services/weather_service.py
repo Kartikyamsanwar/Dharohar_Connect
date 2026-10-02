@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta
 import httpx
 
 from app.config import OPENWEATHER_API_KEY
+from app.services.travel_service import geocode
 
 GEO_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
@@ -63,10 +64,14 @@ async def _geocode(client: httpx.AsyncClient, city: str):
     )
     resp.raise_for_status()
     results = resp.json().get("results") or []
-    if not results:
+    if results:
+        r = results[0]
+        return _store(key, {"lat": r["latitude"], "lon": r["longitude"], "name": r.get("name", city), "state": r.get("admin1", "")})
+    # Open-Meteo's gazetteer misses some small heritage villages (e.g. Dholavira, Nalanda); OSM has them.
+    coords = await geocode(client, city)
+    if not coords:
         return None
-    r = results[0]
-    return _store(key, {"lat": r["latitude"], "lon": r["longitude"], "name": r.get("name", city), "state": r.get("admin1", "")})
+    return _store(key, {"lat": coords[0], "lon": coords[1], "name": city, "state": ""})
 
 
 def _window_max(hourly_times, hourly_probs, day: str, start_h: int, end_h: int):

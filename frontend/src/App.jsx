@@ -19,12 +19,20 @@ export default function App() {
   const [sites, setSites] = useState([]);
   const [selected, setSelected] = useState(null);
   const [prefill, setPrefill] = useState(null);
+  const [planPrefill, setPlanPrefill] = useState(null);
 
   useEffect(() => {
     getHeritage().then(setSites).catch(() => {});
   }, []);
 
   const goBook = (data) => { setPrefill({ ...data, at: Date.now() }); setPage('BOOK'); };
+  const goPlan = (data) => { setPlanPrefill({ ...data, at: Date.now() }); setPage('PLAN TRIP'); };
+
+  const guideAction = (a) => {
+    if (a.type === 'plan') goPlan(a.prefill);
+    else if (a.type === 'book_tickets' || a.type === 'book_stays') goBook(a.prefill);
+    else if (a.type === 'view_site') setSelected(sites.find((s) => s.id === a.site_id) || null);
+  };
 
   return (
     <AuthProvider>
@@ -32,8 +40,8 @@ export default function App() {
         <Header page={page} setPage={setPage} />
         {page === 'HOME' && <Home setPage={setPage} />}
         {page === 'EXPLORE' && <Explore sites={sites} setSelected={setSelected} />}
-        {page === 'AI GUIDE' && <Guide />}
-        {page === 'PLAN TRIP' && <Planner goBook={goBook} setPage={setPage} />}
+        {page === 'AI GUIDE' && <Guide onAction={guideAction} />}
+        {page === 'PLAN TRIP' && <Planner key={planPrefill?.at || 'plan'} prefill={planPrefill} goBook={goBook} setPage={setPage} />}
         {page === 'BOOK' && <Book key={prefill?.at || 'book'} prefill={prefill} setPage={setPage} />}
         {page === 'MY TRIPS' && <MyTrips setPage={setPage} />}
         {page === 'GROUPS' && <Groups />}
