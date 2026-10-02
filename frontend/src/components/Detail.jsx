@@ -2,6 +2,17 @@ export default function Detail({ site, close, goBook }) {
   return (
     <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-5 fade-in" onClick={close}>
       <div className="max-h-[90vh] max-w-2xl overflow-auto rounded-3xl bg-[#fffaf2] p-7" onClick={(e) => e.stopPropagation()}>
+        {site.image && (
+          <figure className="-mx-7 -mt-7 mb-5">
+            <img src={site.image} alt={site.name} className="h-64 w-full rounded-t-3xl object-cover" />
+            {site.image_credit && (
+              <figcaption className="px-7 pt-2 text-[11px] text-[#806b58]">
+                Photo: {site.image_credit.author} · {site.image_credit.license} ·{' '}
+                <a href={site.image_credit.source} target="_blank" rel="noopener noreferrer" className="underline">Wikimedia Commons</a>
+              </figcaption>
+            )}
+          </figure>
+        )}
         <div className="flex justify-between gap-5">
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-[#8d3528]">{site.category}</div>

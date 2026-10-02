@@ -1,12 +1,5 @@
 import { useState } from 'react';
 import { Search, MapPin } from 'lucide-react';
-import { siteImages } from '../lib/api';
-
-function gradientFor(name) {
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return `linear-gradient(135deg, hsl(${h % 40 + 5}, 55%, 38%), hsl(${(h % 40) + 30}, 60%, 55%))`;
-}
 
 export default function Explore({ sites, setSelected }) {
   const [q, setQ] = useState('');
@@ -27,11 +20,14 @@ export default function Explore({ sites, setSelected }) {
       <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {filtered.map((s) => (
           <button key={s.id} onClick={() => setSelected(s)} className="group card-hover overflow-hidden rounded-3xl border border-[#6f4423]/10 bg-white text-left shadow-sm">
-            {siteImages[s.name] ? (
-              <img src={siteImages[s.name]} alt={s.name} className="h-48 w-full object-cover transition group-hover:scale-105" />
-            ) : (
-              <div className="grid h-48 w-full place-items-center text-6xl text-white/90" style={{ background: gradientFor(s.name) }}>{s.name[0]}</div>
-            )}
+            <div className="relative h-48 w-full overflow-hidden bg-[#efe3d1]">
+              <img src={s.image} alt={s.name} loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />
+              {s.image_credit && (
+                <span className="absolute bottom-1 right-2 rounded bg-black/45 px-1.5 py-0.5 text-[9px] text-white/90">
+                  © {s.image_credit.author} · {s.image_credit.license}
+                </span>
+              )}
+            </div>
             <div className="p-5">
               <div className="text-xs font-bold uppercase tracking-wider text-[#8d3528]">{s.category}</div>
               <div className="mt-1 text-xl font-bold">{s.name}</div>
@@ -41,6 +37,7 @@ export default function Explore({ sites, setSelected }) {
           </button>
         ))}
       </div>
+      <p className="mt-10 text-xs text-[#806b58]">Photos from Wikimedia Commons, used under the licences shown on each image. Open a site for the photographer credit and source link.</p>
     </main>
   );
 }
