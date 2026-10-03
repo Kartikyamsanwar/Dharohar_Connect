@@ -1,82 +1,68 @@
-"""Travel/Route Agent — live geocoding + routing via free, keyless OSM services."""
+"""Travel/Route Agent: road distance and drive time between two places.
+
+Live routing comes from the public OSRM server. If it is unreachable or rate-limited, the agent
+falls back to an estimate from straight-line distance and says so, so a plan never loses its
+transport cost just because a free API is busy.
+"""
+
+import math
 
 import httpx
 
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+from app.services.geo import UA, locate
+
 OSRM_URL = "https://router.project-osrm.org/route/v1/driving"
-HEADERS = {"User-Agent": "DharoharConnect/1.0 (https://github.com/Kartikyamsanwar/Dharohar_Connect)"}
+ROAD_FACTOR = 1.25        # typical ratio of Indian road distance to straight-line distance
+AVG_SPEED_KMH = 55        # realistic average including highways and towns
+_routes: dict = {}
 
 
-async def geocode(client: httpx.AsyncClient, place: str):
-    resp = await client.get(
-        NOMINATIM_URL,
-        params={"q": place, "format": "json", "limit": 1, "countrycodes": "in"},
-        headers=HEADERS,
-    )
-    resp.raise_for_status()
-    results = resp.json()
-    if not results:
-        return None
-    return float(results[0]["lat"]), float(results[0]["lon"])
+def _haversine_km(a: dict, b: dict) -> float:
+    r = 6371.0
+    p1, p2 = math.radians(a["lat"]), math.radians(b["lat"])
+    dp, dl = p2 - p1, math.radians(b["lon"] - a["lon"])
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(h))
+
+
+def _unavailable(origin: str, destination: str, note: str) -> dict:
+    return {"available": False, "origin": origin, "destination": destination, "note": note}
 
 
 async def get_route(origin: str, destination: str) -> dict:
     if not origin.strip() or not destination.strip():
-        return {
-            "available": False,
-            "origin": origin,
-            "destination": destination,
-            "note": "Provide both a starting location and a destination for route planning.",
-        }
+        return _unavailable(origin, destination, "Provide both a starting location and a destination for route planning.")
 
-    try:
-        async with httpx.AsyncClient(timeout=12) as client:
-            origin_coords = await geocode(client, origin)
-            dest_coords = await geocode(client, destination)
-            if not origin_coords or not dest_coords:
-                missing = origin if not origin_coords else destination
-                return {
-                    "available": False,
-                    "origin": origin,
-                    "destination": destination,
-                    "note": f"Could not locate '{missing}' on the map.",
-                }
+    async with httpx.AsyncClient(timeout=12) as client:
+        try:
+            a = await locate(client, origin)
+            b = await locate(client, destination)
+        except Exception as exc:
+            return _unavailable(origin, destination, f"Map lookup is busy right now, please try again shortly ({exc.__class__.__name__}).")
+        if not a or not b:
+            return _unavailable(origin, destination, f"Could not locate '{origin if not a else destination}' on the map.")
 
-            olat, olon = origin_coords
-            dlat, dlon = dest_coords
-            route_resp = await client.get(
-                f"{OSRM_URL}/{olon},{olat};{dlon},{dlat}",
-                params={"overview": "false"},
-                headers=HEADERS,
-            )
-            route_resp.raise_for_status()
-            data = route_resp.json()
-    except Exception as exc:
-        return {
-            "available": False,
-            "origin": origin,
-            "destination": destination,
-            "note": f"Live route lookup failed: {exc}",
-        }
+        key = (round(a["lat"], 3), round(a["lon"], 3), round(b["lat"], 3), round(b["lon"], 3))
+        if key in _routes:
+            return {**_routes[key], "origin": origin, "destination": destination}
 
-    routes = data.get("routes") or []
-    if not routes:
-        return {
-            "available": False,
-            "origin": origin,
-            "destination": destination,
-            "note": "No driving route found between these locations.",
-        }
+        try:
+            resp = await client.get(f"{OSRM_URL}/{a['lon']},{a['lat']};{b['lon']},{b['lat']}",
+                                    params={"overview": "false"}, headers=UA)
+            resp.raise_for_status()
+            best = (resp.json().get("routes") or [None])[0]
+        except Exception:
+            best = None
 
-    best = routes[0]
-    distance_km = round(best["distance"] / 1000, 1)
-    duration_hours = round(best["duration"] / 3600, 1)
-
-    return {
-        "available": True,
-        "origin": origin,
-        "destination": destination,
-        "distance_km": distance_km,
-        "duration_hours": duration_hours,
-        "note": f"Approx. {distance_km} km, {duration_hours} hr by road (live route via OSRM).",
-    }
+    if best:
+        distance_km = round(best["distance"] / 1000, 1)
+        duration_hours = round(best["duration"] / 3600, 1)
+        result = {"available": True, "estimated": False, "distance_km": distance_km, "duration_hours": duration_hours,
+                  "note": f"Approx. {distance_km} km, {duration_hours} hr by road (live route via OSRM)."}
+        _routes[key] = result
+    else:
+        distance_km = round(_haversine_km(a, b) * ROAD_FACTOR, 1)
+        duration_hours = round(distance_km / AVG_SPEED_KMH, 1)
+        result = {"available": True, "estimated": True, "distance_km": distance_km, "duration_hours": duration_hours,
+                  "note": f"About {distance_km} km, {duration_hours} hr by road (estimated; live routing is busy right now)."}
+    return {**result, "origin": origin, "destination": destination}

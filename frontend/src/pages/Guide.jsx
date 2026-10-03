@@ -74,7 +74,7 @@ function CostCard({ c }) {
       <div className="mt-2 text-2xl font-bold">{inr(e.per_person_total)}</div>
       <div className="text-xs text-[#806b58]">
         {c.origin} → {c.destination} · {c.days} day(s) · {c.travelers} traveller(s)
-        {c.route?.available && ` · ${c.route.distance_km} km, ~${c.route.duration_hours} hr by road`}
+        {c.route?.available && ` · ${c.route.distance_km} km, ~${c.route.duration_hours} hr by road${c.route.estimated ? " (estimated)" : ""}`}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {Object.entries(e.breakdown).map(([k, v]) => (

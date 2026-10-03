@@ -88,7 +88,8 @@ function TripResult({ result, form, goBook }) {
       </div>
 
       <div className="rounded-3xl bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-2 font-bold text-[#8d3528]">🗺️ LIVE ROUTE</div>
+        <div className="flex items-center gap-2 font-bold text-[#8d3528]">🗺️ {result.travel?.estimated ? "ROUTE (ESTIMATED)" : "LIVE ROUTE"}</div>
+        {result.travel?.estimated && <div className="mt-1 text-xs text-[#806b58]">{result.travel.note}</div>}
         {result.travel?.available ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl bg-[#f8f1e5] p-4">

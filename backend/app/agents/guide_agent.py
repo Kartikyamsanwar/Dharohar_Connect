@@ -164,7 +164,7 @@ async def tool_estimate_trip_cost(origin: str, destination: str, days: int | Non
     return {
         "origin": origin, "destination": city, "site": site["name"] if site else None, "days": days,
         "travelers": travelers,
-        "route": {k: route.get(k) for k in ("available", "distance_km", "duration_hours", "note")},
+        "route": {k: route.get(k) for k in ("available", "estimated", "distance_km", "duration_hours", "note")},
         "estimate": estimate, "stay_options": stays, "entry_tickets": tickets,
         "note": "Planning estimate. Hotel and ticket prices are this app's demo inventory, not live market rates.",
     }

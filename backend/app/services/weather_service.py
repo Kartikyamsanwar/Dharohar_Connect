@@ -12,9 +12,8 @@ from datetime import date, datetime, timedelta
 import httpx
 
 from app.config import OPENWEATHER_API_KEY
-from app.services.travel_service import geocode
+from app.services.geo import get_json, locate
 
-GEO_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 TZ = "Asia/Kolkata"
@@ -55,25 +54,6 @@ def _parse_start(start_date: str) -> date:
         return date.today()
 
 
-async def _geocode(client: httpx.AsyncClient, city: str):
-    key = ("geo", city.lower().strip())
-    if (hit := _cached(key)) is not None:
-        return hit
-    resp = await client.get(
-        GEO_URL, params={"name": city, "count": 1, "language": "en", "countryCode": "IN"}
-    )
-    resp.raise_for_status()
-    results = resp.json().get("results") or []
-    if results:
-        r = results[0]
-        return _store(key, {"lat": r["latitude"], "lon": r["longitude"], "name": r.get("name", city), "state": r.get("admin1", "")})
-    # Open-Meteo's gazetteer misses some small heritage villages (e.g. Dholavira, Nalanda); OSM has them.
-    coords = await geocode(client, city)
-    if not coords:
-        return None
-    return _store(key, {"lat": coords[0], "lon": coords[1], "name": city, "state": ""})
-
-
 def _window_max(hourly_times, hourly_probs, day: str, start_h: int, end_h: int):
     vals = []
     for t, p in zip(hourly_times, hourly_probs):
@@ -88,9 +68,10 @@ async def _forecast(client: httpx.AsyncClient, lat: float, lon: float) -> dict:
     key = ("fc", round(lat, 2), round(lon, 2))
     if (hit := _cached(key)) is not None:
         return hit
-    resp = await client.get(
+    data = await get_json(
+        client,
         FORECAST_URL,
-        params={
+        {
             "latitude": lat,
             "longitude": lon,
             "daily": "weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max",
@@ -99,8 +80,6 @@ async def _forecast(client: httpx.AsyncClient, lat: float, lon: float) -> dict:
             "forecast_days": 16,
         },
     )
-    resp.raise_for_status()
-    data = resp.json()
     daily, hourly = data["daily"], data["hourly"]
     out = {}
     for i, day in enumerate(daily["time"]):
@@ -139,15 +118,10 @@ async def _climatology(client: httpx.AsyncClient, lat: float, lon: float, days: 
             s, e = lo.replace(year=lo.year - offset), hi.replace(year=hi.year - offset)
         except ValueError:
             return {}
-        resp = await client.get(
-            ARCHIVE_URL,
-            params={
-                "latitude": lat, "longitude": lon, "start_date": s.isoformat(), "end_date": e.isoformat(),
-                "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum", "timezone": TZ,
-            },
-        )
-        resp.raise_for_status()
-        d = resp.json()["daily"]
+        d = (await get_json(client, ARCHIVE_URL, {
+            "latitude": lat, "longitude": lon, "start_date": s.isoformat(), "end_date": e.isoformat(),
+            "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum", "timezone": TZ,
+        }))["daily"]
         return {t[5:]: (d["temperature_2m_max"][i], d["temperature_2m_min"][i], d["precipitation_sum"][i] or 0)
                 for i, t in enumerate(d["time"])}
 
@@ -174,15 +148,17 @@ async def _climatology(client: httpx.AsyncClient, lat: float, lon: float, days: 
     return out
 
 
-async def _openweather_fallback(client: httpx.AsyncClient, city: str, trip_dates: list[str]) -> dict:
-    geo = await client.get("https://api.openweathermap.org/geo/1.0/direct",
-                           params={"q": city, "limit": 1, "appid": OPENWEATHER_API_KEY})
-    geo.raise_for_status()
-    places = geo.json()
-    if not places:
-        return {}
+async def _openweather_fallback(client: httpx.AsyncClient, place: dict | None, city: str, trip_dates: list[str]) -> dict:
+    if not place:
+        geo = await client.get("https://api.openweathermap.org/geo/1.0/direct",
+                               params={"q": city, "limit": 1, "appid": OPENWEATHER_API_KEY})
+        geo.raise_for_status()
+        found = geo.json()
+        if not found:
+            return {}
+        place = {"lat": found[0]["lat"], "lon": found[0]["lon"]}
     resp = await client.get("https://api.openweathermap.org/data/2.5/forecast",
-                            params={"lat": places[0]["lat"], "lon": places[0]["lon"], "appid": OPENWEATHER_API_KEY, "units": "metric"})
+                            params={"lat": place["lat"], "lon": place["lon"], "appid": OPENWEATHER_API_KEY, "units": "metric"})
     resp.raise_for_status()
     daily: dict = {}
     for item in resp.json().get("list", []):
@@ -214,9 +190,10 @@ async def get_weather(city: str, start_date: str, days: int) -> dict:
     provider = "open-meteo"
     entries: dict = {}
     place = None
+    primary_error = None
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            place = await _geocode(client, city)
+            place = await locate(client, city)
             if not place:
                 return {"available": False, "error": f"Could not locate '{city}' for weather."}
             fc_dates = [d for d in trip if today <= d <= horizon]
@@ -226,17 +203,19 @@ async def get_weather(city: str, start_date: str, days: int) -> dict:
                 entries.update({d.isoformat(): fc[d.isoformat()] for d in fc_dates if d.isoformat() in fc})
             entries.update(await _climatology(client, place["lat"], place["lon"], other_dates))
     except Exception as exc:
-        if not OPENWEATHER_API_KEY:
-            return {"available": False, "error": f"Weather service unreachable: {exc}"}
-        try:
-            provider = "openweathermap"
-            async with httpx.AsyncClient(timeout=15) as client:
-                entries = await _openweather_fallback(client, city, trip_iso)
-        except Exception as exc2:
-            return {"available": False, "error": f"Weather services unreachable: {exc2}"}
+        primary_error = exc
+        if OPENWEATHER_API_KEY:
+            try:
+                provider = "openweathermap"
+                async with httpx.AsyncClient(timeout=15) as client:
+                    entries = await _openweather_fallback(client, place, city, trip_iso)
+            except Exception:
+                entries = {}
 
     forecast = [entries[d] for d in trip_iso if d in entries]
     if not forecast:
+        if primary_error:
+            return {"available": False, "error": _friendly(primary_error)}
         return {"available": False, "error": "No weather data available for these dates."}
 
     live = [f for f in forecast if f["source"] == "forecast"]
@@ -252,6 +231,14 @@ async def get_weather(city: str, start_date: str, days: int) -> dict:
         "historical_days": len(hist),
         "planning_impact": _build_planning_impact(forecast, len(hist)),
     }
+
+
+def _friendly(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+        return "Live weather is busy right now (the free weather service is rate-limiting requests). Please try again in a minute."
+    if isinstance(exc, httpx.TimeoutException):
+        return "Live weather took too long to respond. Please try again in a moment."
+    return f"Live weather is temporarily unavailable ({exc.__class__.__name__}). Please try again shortly."
 
 
 def _build_planning_impact(forecast: list, historical_days: int = 0) -> list[str]:
