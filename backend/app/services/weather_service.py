@@ -2,12 +2,16 @@
 
 Primary: Open-Meteo (free, no key) - 16-day daily forecast plus hourly rain probability, so the
 itinerary can react to wet mornings/afternoons/evenings. Dates beyond the forecast horizon use
-historical averages (clearly labelled). OpenWeather (5-day) is used only as a fallback.
+historical averages (clearly labelled).
+Backup: met.no (Norwegian Meteorological Institute, free, no key, ~10 days). Open-Meteo rate-limits
+shared cloud IPs such as Render's free tier; met.no gives rainfall amounts rather than probabilities
+for India, so with met.no the rain chance is estimated from the forecast amount.
+Last resort: OpenWeather (5-day, needs a key).
 """
 
 import asyncio
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 
@@ -21,6 +25,10 @@ FORECAST_HORIZON_DAYS = 15
 HEAT_THRESHOLD_C = 36
 RAIN_THRESHOLD_PCT = 60
 CACHE_TTL_SECONDS = 1800
+METNO_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete"
+IST = timezone(timedelta(hours=5, minutes=30))
+OPEN_METEO_COOLDOWN_SECONDS = 600
+_open_meteo_blocked_until = 0.0
 
 WMO = {
     0: "clear sky", 1: "mainly clear", 2: "partly cloudy", 3: "overcast",
@@ -107,6 +115,77 @@ async def _forecast(client: httpx.AsyncClient, lat: float, lon: float) -> dict:
     return _store(key, out)
 
 
+METNO_WORDS = {
+    "clearsky": "clear sky", "fair": "mainly clear", "partlycloudy": "partly cloudy", "cloudy": "overcast",
+    "fog": "fog", "lightrain": "light rain", "rain": "rain", "heavyrain": "heavy rain",
+    "lightrainshowers": "light rain showers", "rainshowers": "rain showers", "heavyrainshowers": "heavy rain showers",
+}
+
+
+def _metno_condition(code: str) -> str:
+    base = code.split("_")[0]
+    if "thunder" in base:
+        return "thunderstorm"
+    return METNO_WORDS.get(base, base)
+
+
+def _chance_from_mm(mm: float, window: bool) -> int:
+    """Rough rain likelihood from forecast rainfall (met.no gives amounts, not probabilities, for India)."""
+    steps = [(2, 75), (0.5, 55), (0.1, 30)] if window else [(10, 85), (5, 70), (2, 55), (0.5, 35), (0.05, 20)]
+    return next((pct for limit, pct in steps if mm >= limit), 5)
+
+
+async def _metno_forecast(client: httpx.AsyncClient, lat: float, lon: float) -> dict:
+    key = ("metno", round(lat, 2), round(lon, 2))
+    if (hit := _cached(key)) is not None:
+        return hit
+    data = await get_json(client, METNO_URL, {"lat": round(lat, 4), "lon": round(lon, 4)})
+    hourly_mm: dict = {}
+    temps: dict = {}
+    codes: dict = {}
+    for t in data["properties"]["timeseries"]:
+        at = datetime.fromisoformat(t["time"].replace("Z", "+00:00")).astimezone(IST)
+        d = t["data"]
+        day = at.date().isoformat()
+        temps.setdefault(day, []).append(d["instant"]["details"]["air_temperature"])
+        if "next_1_hours" in d:
+            hourly_mm[at] = d["next_1_hours"]["details"].get("precipitation_amount", 0) or 0
+            codes.setdefault(day, []).append((at.hour, d["next_1_hours"]["summary"]["symbol_code"]))
+        elif "next_6_hours" in d:
+            six = d["next_6_hours"]
+            for h in range(6):  # spread the 6-hour total so morning/afternoon/evening stay meaningful
+                hourly_mm[at + timedelta(hours=h)] = (six["details"].get("precipitation_amount", 0) or 0) / 6
+            for k in ("air_temperature_max", "air_temperature_min"):
+                if k in six["details"]:
+                    temps[day].append(six["details"][k])
+            codes.setdefault(day, []).append((at.hour, six["summary"]["symbol_code"]))
+
+    by_day: dict = {}
+    for at, mm in hourly_mm.items():
+        by_day.setdefault(at.date().isoformat(), []).append((at.hour, mm))
+
+    out = {}
+    for day, ts in temps.items():
+        day_codes = codes.get(day)
+        if not day_codes:
+            continue
+        hours = by_day.get(day, [])
+        windows = {}
+        for name, lo, hi in (("morning", 6, 11), ("afternoon", 12, 17), ("evening", 18, 21)):
+            vals = [mm for h, mm in hours if lo <= h <= hi]
+            windows[name] = _chance_from_mm(sum(vals), window=True) if vals else None
+        total = sum(mm for _, mm in hours)
+        midday = min(day_codes, key=lambda c: abs(c[0] - 13))[1]
+        out[day] = {
+            "date": day, "temp": round(max(ts)), "temp_max": round(max(ts)), "temp_min": round(min(ts)),
+            "rain_probability": max([_chance_from_mm(total, window=False)] + [w for w in windows.values() if w is not None]),
+            "precipitation_mm": round(total, 1), "condition": _metno_condition(midday),
+            "thunderstorm": any("thunder" in c for _, c in day_codes), "windows": windows, "source": "forecast",
+            "rain_estimated": True,
+        }
+    return _store(key, out)
+
+
 async def _climatology(client: httpx.AsyncClient, lat: float, lon: float, days: list[date]) -> dict:
     """Average of the same calendar days in the previous 3 years."""
     if not days:
@@ -187,36 +266,55 @@ async def get_weather(city: str, start_date: str, days: int) -> dict:
     today = date.today()
     horizon = today + timedelta(days=FORECAST_HORIZON_DAYS)
 
-    provider = "open-meteo"
+    global _open_meteo_blocked_until
+    provider = None
     entries: dict = {}
     place = None
-    primary_error = None
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
+    errors: list = []
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
             place = await locate(client, city)
-            if not place:
-                return {"available": False, "error": f"Could not locate '{city}' for weather."}
+        except Exception as exc:
+            errors.append(exc)
+        if place:
             fc_dates = [d for d in trip if today <= d <= horizon]
             other_dates = [d for d in trip if d not in fc_dates]
-            if fc_dates:
-                fc = await _forecast(client, place["lat"], place["lon"])
+            open_meteo_ok = time.time() >= _open_meteo_blocked_until
+            fc = None
+            if fc_dates and open_meteo_ok:
+                try:
+                    fc, provider = await _forecast(client, place["lat"], place["lon"]), "open-meteo"
+                except Exception as exc:
+                    errors.append(exc)
+                    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+                        _open_meteo_blocked_until = time.time() + OPEN_METEO_COOLDOWN_SECONDS
+                        open_meteo_ok = False
+            if fc_dates and fc is None:
+                try:
+                    fc, provider = await _metno_forecast(client, place["lat"], place["lon"]), "met.no"
+                except Exception as exc:
+                    errors.append(exc)
+            if fc:
                 entries.update({d.isoformat(): fc[d.isoformat()] for d in fc_dates if d.isoformat() in fc})
-            entries.update(await _climatology(client, place["lat"], place["lon"], other_dates))
-    except Exception as exc:
-        primary_error = exc
-        if OPENWEATHER_API_KEY:
+            if other_dates and open_meteo_ok:
+                try:
+                    entries.update(await _climatology(client, place["lat"], place["lon"], other_dates))
+                    provider = provider or "open-meteo"
+                except Exception as exc:
+                    errors.append(exc)
+        elif not errors:
+            return {"available": False, "error": f"Could not locate '{city}' for weather."}
+
+        if not entries and OPENWEATHER_API_KEY:
             try:
-                provider = "openweathermap"
-                async with httpx.AsyncClient(timeout=15) as client:
-                    entries = await _openweather_fallback(client, place, city, trip_iso)
-            except Exception:
-                entries = {}
+                entries, provider = await _openweather_fallback(client, place, city, trip_iso), "openweathermap"
+            except Exception as exc:
+                errors.append(exc)
 
     forecast = [entries[d] for d in trip_iso if d in entries]
     if not forecast:
-        if primary_error:
-            return {"available": False, "error": _friendly(primary_error)}
-        return {"available": False, "error": "No weather data available for these dates."}
+        # Every live provider failed (e.g. rate limits): show typical seasonal conditions, clearly labelled.
+        forecast, provider = [_seasonal(d) for d in trip], "seasonal estimate (live weather busy)"
 
     live = [f for f in forecast if f["source"] == "forecast"]
     hist = [f for f in forecast if f["source"] == "climatology"]
@@ -230,6 +328,20 @@ async def get_weather(city: str, start_date: str, days: int) -> dict:
         "live_days": len(live),
         "historical_days": len(hist),
         "planning_impact": _build_planning_impact(forecast, len(hist)),
+    }
+
+
+# Typical (min, max, rain chance %) by month for peninsular and central India; used only as a last resort.
+SEASONAL = {1: (15, 30, 5), 2: (17, 33, 5), 3: (21, 36, 5), 4: (24, 38, 10), 5: (25, 39, 20), 6: (23, 33, 60),
+            7: (22, 30, 70), 8: (22, 30, 65), 9: (22, 31, 55), 10: (21, 31, 35), 11: (18, 29, 15), 12: (16, 28, 5)}
+
+
+def _seasonal(d: date) -> dict:
+    lo, hi, rain = SEASONAL[d.month]
+    return {
+        "date": d.isoformat(), "temp": hi, "temp_max": hi, "temp_min": lo, "rain_probability": rain,
+        "precipitation_mm": None, "condition": f"typical for {d.strftime('%B')} (estimate)", "thunderstorm": False,
+        "windows": {"morning": None, "afternoon": None, "evening": None}, "source": "climatology",
     }
 
 
